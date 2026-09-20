@@ -1,0 +1,45 @@
+{
+  "name": "sunlicense",
+  "version": "0.0.1",
+  "description": "Official SunLicense client for JavaScript — licence key management and validation for indie software developers.",
+  "keywords": [
+    "license",
+    "licence",
+    "licensing",
+    "license-key",
+    "license-manager",
+    "activation",
+    "drm",
+    "anti-piracy",
+    "sunlicense"
+  ],
+  "homepage": "https://sunlicense.com",
+  "bugs": {
+    "url": "https://github.com/sunlicense-com/sunlicense-js/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunlicense-com/sunlicense-js.git"
+  },
+  "license": "MIT",
+  "author": "Hapangama",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
