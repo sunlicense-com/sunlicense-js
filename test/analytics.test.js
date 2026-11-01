@@ -172,6 +172,22 @@ test('install id is created once and kept in the data directory', async () => {
   assert.equal(fetch.seen[1].body.installId, id);
 });
 
+test('a report over 16 KB drops the charts first, then the features (kept for the next report)', async () => {
+  const fetch = recorder();
+  const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
+  for (let i = 0; i < 30; i++) a.advancedPie(`big${i}`, () => Object.fromEntries(Array.from({ length: 50 }, (_, j) => ['v'.repeat(40) + j, j + 1])));
+  a.feature('kept');
+  assert.equal(await a.sendNow(), 204);
+  assert.equal(fetch.seen[0].body.charts, undefined);
+  assert.deepEqual(fetch.seen[0].body.features, { kept: 1 });
+  const b = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
+  b._add({ write: (r) => { r.features = Object.fromEntries(Array.from({ length: 2000 }, (_, i) => [`x${i}`, 1])); } });
+  b.feature('still-counted');
+  await b.sendNow();
+  assert.equal(fetch.seen[1].body.features, undefined);
+  assert.equal(b._features.get('still-counted'), 1);
+});
+
 test('a report over 16 KB keeps only the built-in parts', async () => {
   const fetch = recorder();
   const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
@@ -226,14 +242,24 @@ test('features: counted, sent with the next report, kept until it is stored', as
   assert.equal(offA._features.size, 0);
 });
 
-test('features: at most 50 per report, the rest wait', async () => {
+test('features: at most 50 different ones, like the Java SDK; switching off drops the counts', async () => {
   const fetch = recorder();
   const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
   for (let i = 0; i < 60; i++) a.feature(`f${i}`);
+  a.feature('f0');
   await a.sendNow();
   await a.sendNow();
   assert.equal(Object.keys(fetch.seen[0].body.features).length, 50);
-  assert.equal(Object.keys(fetch.seen[1].body.features).length, 10);
+  assert.equal(fetch.seen[0].body.features.f0, 2);
+  assert.equal(fetch.seen[1].body.features, undefined);
+  let on = true;
+  const b = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), enabled: () => on, _env: off, _fetch: fetch });
+  b.feature('auto-sell');
+  on = false;
+  assert.equal(await b.sendNow(), 0);
+  on = true;
+  await b.sendNow();
+  assert.equal(fetch.seen[2].body.features, undefined);
 });
 
 test('custom charts: every type, the wire shape of spec 185 §4.6', async () => {
@@ -261,7 +287,7 @@ test('custom charts: every type, the wire shape of spec 185 §4.6', async () => 
     { id: 'players', type: 'single_line', data: { value: 42 } },
     { id: 'worlds', type: 'multi_line', data: { values: { overworld: 30, nether: -2 } } },
     { id: 'commands', type: 'simple_bar', data: { values: { sell: 12 } } },
-    { id: 'tiers', type: 'advanced_bar', data: { values: { gold: [1, 2, 3] } } },
+    { id: 'tiers', type: 'advanced_bar', data: { values: { gold: [1, 2, 3], bad: [1] } } },
   ]);
 });
 

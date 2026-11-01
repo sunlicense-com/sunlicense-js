@@ -134,7 +134,8 @@ export class SunLicenseAnalytics {
   feature(name, uses = 1) {
     try {
       const id = chartId(name);
-      if (!id || !Number.isInteger(uses) || uses < 1 || this._optedOut()) return this;
+      if (!id || !Number.isInteger(uses) || uses < 1 || this._closed || this._optedOut()) return this;
+      if (!this._features.has(id) && this._features.size >= MAX_FEATURES) return this; // at most 50 different features
       this._features.set(id, Math.min(MAX_NUMBER, (this._features.get(id) || 0) + uses));
     } catch { /* never throws */ }
     return this;
@@ -215,6 +216,7 @@ export class SunLicenseAnalytics {
   async _send() {
     if (this._closed) return { status: 0 };
     if (this._optedOut()) {
+      this._features.clear(); // nothing is counted while it's off
       this._outcome('off', 'analytics is switched off; nothing sent');
       return { status: 0 };
     }
@@ -224,6 +226,7 @@ export class SunLicenseAnalytics {
       return { status: 0 };
     }
     let body = JSON.stringify(report);
+    if (Buffer.byteLength(body) > MAX_BODY && delete report.charts) body = JSON.stringify(report); // charts go first, then features
     if (Buffer.byteLength(body) > MAX_BODY) {
       for (const key of Object.keys(report)) if (!CORE_KEYS.includes(key)) delete report[key];
       body = JSON.stringify(report);
@@ -336,9 +339,11 @@ export function chartId(value) {
 /** Feature usage (kept until a report is stored) and custom charts (callbacks run before each report). */
 function usageSection(analytics) {
   let sending = null;
+  let sent = null;
   return {
     write(report) {
       sending = null;
+      sent = report;
       const features = {};
       let n = 0;
       for (const [name, uses] of analytics._features) {
@@ -361,7 +366,7 @@ function usageSection(analytics) {
       if (charts.length) report.charts = charts;
     },
     sent(accepted) {
-      if (accepted && sending) {
+      if (accepted && sending && sent && sent.features) { // not when a report over 16 KB left the features out
         for (const [name, uses] of Object.entries(sending)) {
           const left = (analytics._features.get(name) || 0) - uses;
           if (left > 0) analytics._features.set(name, left);
@@ -407,8 +412,12 @@ export function chartData(type, value) {
       let n = 0;
       for (const [k, list] of entries(value)) {
         const key = clean(k, 64);
-        const nums = Array.isArray(list) ? list.slice(0, MAX_BAR).map(number) : [];
-        if (key && nums.length && nums.every((x) => x != null) && n < MAX_VALUES) {
+        const nums = [];
+        for (const x of Array.isArray(list) ? list : []) {
+          if (nums.length >= MAX_BAR || number(x) == null) break; // up to 20 numbers, until the first that isn't one
+          nums.push(x);
+        }
+        if (key && nums.length && n < MAX_VALUES) {
           values[key] = nums;
           n++;
         }
