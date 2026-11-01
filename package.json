@@ -1,6 +1,6 @@
 {
   "name": "sunlicense",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Official SunLicense client for JavaScript — licence key management and validation for indie software developers.",
   "keywords": [
     "license",
@@ -26,7 +26,8 @@
   "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./analytics": "./src/analytics.js"
   },
   "files": [
     "src",
