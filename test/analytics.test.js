@@ -83,8 +83,8 @@ test('platform override and macOS / Windows names', () => {
   assert.equal(m.platformVersion, '4.2');
   assert.equal(macVersion('23.5.0'), '14.5');
   assert.equal(macVersion('19.6.0'), '10.15');
-  assert.equal(macVersion('25.0.0'), '26.0');
-  assert.equal(macVersion('26.1.0'), '27.1');
+  assert.equal(macVersion('24.6.0'), '15.6');
+  assert.equal(macVersion('25.0.0'), null);
   assert.equal(macVersion('nonsense'), null);
 });
 

@@ -498,13 +498,13 @@ function macProductVersion() {
   return match ? match[1] : null;
 }
 
-/** From the kernel version: Darwin 23.5.0 is macOS 14.5, Darwin 25.0.0 macOS 26.0, Darwin 19.6.0 macOS 10.15. */
+/** From the kernel version: Darwin 23.5.0 is macOS 14.5, Darwin 19.6.0 macOS 10.15; newer kernels aren't guessed. */
 export function macVersion(darwin) {
   const match = /^(\d+)\.(\d+)/.exec(String(darwin || ''));
   if (!match) return null;
   const major = Number(match[1]);
   const minor = Number(match[2]);
-  if (major >= 25) return `${major + 1}.${minor}`;
+  if (major >= 25) return null; // Darwin 25 is macOS 26, but the mapping isn't stable: don't guess
   return major >= 20 ? `${major - 9}.${minor}` : major >= 5 ? `10.${major - 4}` : null;
 }
 
