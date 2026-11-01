@@ -92,6 +92,9 @@ export class SunLicenseAnalytics {
     this._firstDelay = o._firstDelayMs;
     this._collect = o._collect;
     this._sections = [];
+    this._features = new Map();
+    this._charts = new Map();
+    this._sections.push(usageSection(this));
     this._closed = false;
     this._timer = null;
     this._lastOutcome = null;
@@ -121,6 +124,59 @@ export class SunLicenseAnalytics {
     } catch {
       return -1;
     }
+  }
+
+  /**
+   * Counts uses of one of your product's features ("auto-sell"): `uses` (default 1) is added and sent with
+   * the next report, and kept until a report is stored. Cheap, never throws; nothing is counted while
+   * analytics is off. Names are lower-cased and must match [a-z0-9][a-z0-9._-]{0,47}.
+   */
+  feature(name, uses = 1) {
+    try {
+      const id = chartId(name);
+      if (!id || !Number.isInteger(uses) || uses < 1 || this._optedOut()) return this;
+      this._features.set(id, Math.min(MAX_NUMBER, (this._features.get(id) || 0) + uses));
+    } catch { /* never throws */ }
+    return this;
+  }
+
+  /** A pie of one value per install, e.g. simplePie('storage', () => config.storage). */
+  simplePie(id, callback) { return this._chart(id, 'simple_pie', callback); }
+
+  /** A pie of weighted values per install: advancedPie('modules', () => ({ shop: 1, auctions: 1 })). */
+  advancedPie(id, callback) { return this._chart(id, 'advanced_pie', callback); }
+
+  /** A two-level pie: drilldownPie('database', () => ({ mysql: { '8.0': 1 } })). */
+  drilldownPie(id, callback) { return this._chart(id, 'drilldown_pie', callback); }
+
+  /** A number summed over installs, e.g. singleLine('players', () => players.size). */
+  singleLine(id, callback) { return this._chart(id, 'single_line', callback); }
+
+  /** Several numbers per install, one line each: multiLine('worlds', () => ({ overworld: 30, nether: 12 })). */
+  multiLine(id, callback) { return this._chart(id, 'multi_line', callback); }
+
+  /** Numbers per category: simpleBar('commands', () => ({ sell: 12, buy: 3 })). */
+  simpleBar(id, callback) { return this._chart(id, 'simple_bar', callback); }
+
+  /** Several numbers per category: advancedBar('tiers', () => ({ gold: [1, 2, 3] })). */
+  advancedBar(id, callback) { return this._chart(id, 'advanced_bar', callback); }
+
+  /** Stops sending a custom chart. */
+  removeChart(id) {
+    const key = chartId(id);
+    if (key) this._charts.delete(key);
+    return this;
+  }
+
+  _chart(id, type, callback) {
+    const key = chartId(id);
+    if (!key || typeof callback !== 'function') {
+      this._outcome('bad-chart', `chart id ${JSON.stringify(String(id))} ignored: use [a-z0-9][a-z0-9._-]{0,47} and a function`);
+      return this;
+    }
+    this._charts.delete(key); // the same id replaces the earlier one, at the end
+    this._charts.set(key, { type, callback });
+    return this;
   }
 
   /** @internal Something that adds to each report (feature usage, custom charts) and hears whether it was taken. */
@@ -261,6 +317,130 @@ export class SunLicenseAnalytics {
       if (this._debug) console.debug('SunLicense analytics: ' + message);
     }
   }
+}
+
+const MAX_FEATURES = 50;
+const MAX_CHARTS = 30;
+const MAX_VALUES = 50;
+const MAX_BAR = 20;
+const MAX_NUMBER = 1e9;
+const ID = /^[a-z0-9][a-z0-9._-]{0,47}$/;
+
+/** Feature names and chart ids: lower-cased, [a-z0-9][a-z0-9._-]{0,47}, else null. */
+export function chartId(value) {
+  if (typeof value !== 'string') return null;
+  const id = value.trim().toLowerCase();
+  return ID.test(id) ? id : null;
+}
+
+/** Feature usage (kept until a report is stored) and custom charts (callbacks run before each report). */
+function usageSection(analytics) {
+  let sending = null;
+  return {
+    write(report) {
+      sending = null;
+      const features = {};
+      let n = 0;
+      for (const [name, uses] of analytics._features) {
+        if (n++ >= MAX_FEATURES) break;
+        features[name] = uses;
+      }
+      if (n > 0) {
+        report.features = features;
+        sending = features;
+      }
+      const charts = [];
+      for (const [id, chart] of analytics._charts) {
+        if (charts.length >= MAX_CHARTS) break;
+        let data = null;
+        try {
+          data = chartData(chart.type, chart.callback());
+        } catch { /* a callback that throws leaves its chart out */ }
+        if (data) charts.push({ id, type: chart.type, data });
+      }
+      if (charts.length) report.charts = charts;
+    },
+    sent(accepted) {
+      if (accepted && sending) {
+        for (const [name, uses] of Object.entries(sending)) {
+          const left = (analytics._features.get(name) || 0) - uses;
+          if (left > 0) analytics._features.set(name, left);
+          else analytics._features.delete(name);
+        }
+      }
+      sending = null;
+    },
+  };
+}
+
+/** A chart callback's value as the report's `data`, or null when there's nothing (valid) to send. */
+export function chartData(type, value) {
+  if (value == null) return null;
+  switch (type) {
+    case 'simple_pie': {
+      const v = clean(value, 64);
+      return v ? { value: v } : null;
+    }
+    case 'single_line':
+      return number(value) != null ? { value: number(value) } : null;
+    case 'advanced_pie':
+    case 'multi_line':
+    case 'simple_bar': {
+      const values = numbers(value, type === 'advanced_pie' ? 1 : -MAX_NUMBER);
+      return values ? { values } : null;
+    }
+    case 'drilldown_pie': {
+      const values = {};
+      let n = 0;
+      for (const [outer, inner] of entries(value)) {
+        const key = clean(outer, 64);
+        const slice = numbers(inner, 1);
+        if (key && slice && n < MAX_VALUES) {
+          values[key] = slice;
+          n++;
+        }
+      }
+      return n ? { values } : null;
+    }
+    case 'advanced_bar': {
+      const values = {};
+      let n = 0;
+      for (const [k, list] of entries(value)) {
+        const key = clean(k, 64);
+        const nums = Array.isArray(list) ? list.slice(0, MAX_BAR).map(number) : [];
+        if (key && nums.length && nums.every((x) => x != null) && n < MAX_VALUES) {
+          values[key] = nums;
+          n++;
+        }
+      }
+      return n ? { values } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function number(v) {
+  return Number.isInteger(v) && Math.abs(v) <= MAX_NUMBER ? v : null;
+}
+
+/** {key: integer ≥ min}, at most 50 entries; null when empty. */
+function numbers(value, min) {
+  const out = {};
+  let n = 0;
+  for (const [k, v] of entries(value)) {
+    const key = clean(k, 64);
+    if (key && number(v) != null && v >= min && n < MAX_VALUES) {
+      out[key] = v;
+      n++;
+    }
+  }
+  return n ? out : null;
+}
+
+function entries(value) {
+  if (value instanceof Map) return [...value.entries()];
+  return value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value) : [];
 }
 
 /** First report after a random 1–30 minutes, so a fleet restarted together doesn't report together. */

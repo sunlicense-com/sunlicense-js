@@ -205,3 +205,73 @@ test('reports in the background to a real HTTP server, and close() stops it', as
   assert.equal(bodies[0].body.productAnalyticsId, 'pa_bg');
   assert.equal(bodies[0].body.sdk.name, 'js');
 });
+
+test('features: counted, sent with the next report, kept until it is stored', async () => {
+  const fetch = recorder(503, '60');
+  const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
+  a.feature('auto-sell').feature('Auto-Sell', 2).feature('web-editor');
+  a.feature('bad name!').feature('x', 0).feature('y', 1.5).feature(42);
+  assert.equal(await a.sendNow(), 503);
+  assert.deepEqual(fetch.seen[0].body.features, { 'auto-sell': 3, 'web-editor': 1 });
+  a.feature('auto-sell');
+  const ok = recorder(204);
+  a._fetch = ok;
+  assert.equal(await a.sendNow(), 204);
+  assert.deepEqual(ok.seen[0].body.features, { 'auto-sell': 4, 'web-editor': 1 });
+  assert.equal(await a.sendNow(), 204);
+  assert.equal(ok.seen[1].body.features, undefined);
+  // nothing is counted while analytics is off
+  const offA = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), enabled: false, _env: off, _fetch: ok });
+  offA.feature('auto-sell');
+  assert.equal(offA._features.size, 0);
+});
+
+test('features: at most 50 per report, the rest wait', async () => {
+  const fetch = recorder();
+  const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
+  for (let i = 0; i < 60; i++) a.feature(`f${i}`);
+  await a.sendNow();
+  await a.sendNow();
+  assert.equal(Object.keys(fetch.seen[0].body.features).length, 50);
+  assert.equal(Object.keys(fetch.seen[1].body.features).length, 10);
+});
+
+test('custom charts: every type, the wire shape of spec 185 §4.6', async () => {
+  const fetch = recorder();
+  const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch })
+    .simplePie('storage', () => 'mysql')
+    .advancedPie('modules', () => ({ shop: 2, auctions: 1, zero: 0 }))
+    .drilldownPie('java', () => new Map([['Java 21', { '21.0.4': 1 }], ['empty', {}]]))
+    .singleLine('players', () => 42)
+    .multiLine('worlds', () => ({ overworld: 30, nether: -2 }))
+    .simpleBar('commands', () => ({ sell: 12 }))
+    .advancedBar('tiers', () => ({ gold: [1, 2, 3], bad: [1, 'x'] }))
+    .simplePie('nothing', () => null)
+    .simplePie('empty', () => '  ')
+    .singleLine('huge', () => 2e9)
+    .simplePie('throws', () => { throw new Error('x'); })
+    .simplePie('Bad Id', () => 'x')
+    .simplePie('removed', () => 'x')
+    .removeChart('removed');
+  assert.equal(await a.sendNow(), 204);
+  assert.deepEqual(fetch.seen[0].body.charts, [
+    { id: 'storage', type: 'simple_pie', data: { value: 'mysql' } },
+    { id: 'modules', type: 'advanced_pie', data: { values: { shop: 2, auctions: 1 } } },
+    { id: 'java', type: 'drilldown_pie', data: { values: { 'Java 21': { '21.0.4': 1 } } } },
+    { id: 'players', type: 'single_line', data: { value: 42 } },
+    { id: 'worlds', type: 'multi_line', data: { values: { overworld: 30, nether: -2 } } },
+    { id: 'commands', type: 'simple_bar', data: { values: { sell: 12 } } },
+    { id: 'tiers', type: 'advanced_bar', data: { values: { gold: [1, 2, 3] } } },
+  ]);
+});
+
+test('custom charts: the same id replaces the earlier one; at most 30 per report', async () => {
+  const fetch = recorder();
+  const a = SunLicenseAnalytics.create({ productAnalyticsId: 'pa_x', dataDirectory: tmpDir(), _env: off, _fetch: fetch });
+  a.simplePie('storage', () => 'mysql').simplePie('STORAGE', () => 'sqlite');
+  for (let i = 0; i < 40; i++) a.singleLine(`c${i}`, () => i);
+  await a.sendNow();
+  const charts = fetch.seen[0].body.charts;
+  assert.equal(charts.length, 30);
+  assert.deepEqual(charts[0], { id: 'storage', type: 'simple_pie', data: { value: 'sqlite' } });
+});
