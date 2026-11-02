@@ -8,7 +8,10 @@
  * Docs: https://docs.sunlicense.hapangama.com
  */
 
-export const VERSION = '0.0.1';
+import { SunLicenseAnalytics } from './analytics.js';
+
+export { SunLicenseAnalytics } from './analytics.js';
+export const VERSION = '0.1.0';
 
 /**
  * A SunLicense API client.
@@ -67,6 +70,30 @@ export class SunLicense {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Starts built-in product analytics for a licensed product, with this client's base URL and API key:
+   * a report every 30 minutes in the background (see SunLicenseAnalytics). Never throws.
+   *
+   * @param {object} options  `licenseKey` and `fingerprint` (the values you validate with), plus any
+   *   SunLicenseAnalytics.start option (`productVersion`, `enabled`, `productAnalyticsId`, `dataDirectory`, …).
+   * @returns {SunLicenseAnalytics}
+   */
+  analytics(options = {}) {
+    return SunLicenseAnalytics.start({ baseUrl: this.baseUrl, apiKey: this.token, ...options });
+  }
+
+  /**
+   * Starts built-in product analytics for a free product with its public product analytics id
+   * (Product → Analytics in the dashboard). No license or API key needed. Never throws.
+   *
+   * @param {string} productAnalyticsId  pa_…
+   * @param {object} [options]  Any SunLicenseAnalytics.start option.
+   * @returns {SunLicenseAnalytics}
+   */
+  static analytics(productAnalyticsId, options = {}) {
+    return SunLicenseAnalytics.start({ ...options, productAnalyticsId });
   }
 }
 
