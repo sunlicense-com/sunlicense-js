@@ -1,6 +1,6 @@
 {
   "name": "sunlicense",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Official SunLicense client for JavaScript — licence key management and validation for indie software developers.",
   "keywords": [
     "license",

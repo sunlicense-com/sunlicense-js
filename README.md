@@ -84,6 +84,42 @@ its own errors.
 
 Docs: https://docs.sunlicense.com/guide/sdks#built-in-analytics
 
+## Protection: core unlock, tamper reports, ownership notice
+
+`sunlicense seal <file> --product <code> [--digest <files>]` (the [CLI](https://docs.sunlicense.com/cli/)) encrypts
+part of your product, its *core*, on SunLicense's servers under a key only they hold, and prints the sealed text
+(`SLS1.…`) you ship. A valid license check answers with that key (`unlock`); a refused one (suspended, expired,
+revoked) doesn't, and this SDK forgets the one it had. So a copy whose license check was cut out can't run its core.
+The unlock from the last valid check is cached for 7 days (in `cacheDirectory`, default `~/.sunlicense`), encrypted under a key bound to the license key,
+the machine id and this machine, so outages don't stop your customers.
+
+```js
+const client = new SunLicense({ baseUrl: 'https://api.sunlicense.com', token: process.env.SUNLICENSE_API_KEY });
+const protection = client.protection({ licenseKey, fingerprint: machineId,
+  product: 'My Bot', owner: 'Example Studio', terms: 'https://example.com/terms', cacheDirectory: './data' });
+console.log(protection.notice());                               // product, owner, masked key
+await client.validate(licenseKey, { fingerprint: machineId });  // sends integrity, keeps or forgets the unlock
+const core = protection.unseal(SEALED_CORE);                    // Buffer; throws Locked without a valid unlock
+protection.integrity(appDir);                                   // 'OK' / 'MODIFIED', sent with the next check
+```
+
+The [discord.js template](https://github.com/sunlicense-com/example-discord-bot-js) does all of this, sealing at build time.
+
+- `unseal(sealed)`: the core, or throws `Locked` without a valid unlock (or for data sealed for another product).
+- `integrity(...)`: compares the files whose digests were sealed with the core (`--digest`) with what is running;
+  `OK` or `MODIFIED` (with the changed files) is sent with the next check, where Sentinel sees it.
+- `notice()`: `My Bot is licensed software by Example Studio. License AX8P-XXXX-XXXX-XXXX. Terms: …`; never the full
+  key or the buyer's name.
+- `await protection.protectedFile(name)`: a file uploaded to the product (Standard plan), sent only while the license is valid.
+- `accept(body)` and `protection.validateFields()`: for your own HTTP code; the client does both when you create the protection from it.
+- `acceptOffline(file, publicKey)`: the unlock from a valid [offline license file](https://docs.sunlicense.com/guide/offline-licenses).
+- Only `node:crypto`: Node 18+, Bun, Deno and FiveM's server JavaScript.
+
+Honest limit: someone with a valid license can still extract the unlock and patch their copy; that copy then fails
+its integrity check and is reported. Protection raises the cost and makes leaks visible. Wire format and test
+vectors: `test/fixtures/protection-test-vectors.json` (a copy of SunLicense's); docs:
+https://docs.sunlicense.com/guide/protection
+
 ## Requirements
 
 Node.js 18 or newer (uses the built-in `fetch`).
@@ -100,6 +136,7 @@ SunLicense also provides clients for **Java**, **PHP**, **Python** and **Lua**.
 
 ## Changelog
 
+- **0.2.0**: core unlock, tamper reports, the ownership notice and protected files: `client.protection()`, `SunLicenseProtection`.
 - **0.1.0**: built-in product analytics (opt-out), feature usage and custom charts: `client.analytics()`, `SunLicense.analytics()`.
 
 ## Tests

@@ -13,7 +13,7 @@ import { SunLicenseProtection } from './protection.js';
 
 export { SunLicenseAnalytics } from './analytics.js';
 export { SunLicenseProtection, Locked, Refused, mask } from './protection.js';
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 /**
  * A SunLicense API client.
