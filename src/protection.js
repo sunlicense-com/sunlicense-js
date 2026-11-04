@@ -379,9 +379,9 @@ export class SunLicenseProtection {
     if (!this.productCode) throw new TypeError('SunLicense: set productCode to download protected files');
     if (!this.licenseKey) throw new Refused(401, 'No license key');
     const url = `${this.baseUrl}/api/v2/protected-files/${encodeURIComponent(this.productCode)}/${encodeURIComponent(name)}`;
-    const headers = { license: this.licenseKey };
+    const headers = { 'x-license-key': this.licenseKey };
     if (this.apiKey) headers.authorization = `Bearer ${this.apiKey}`;
-    if (this.fingerprint) headers.fingerprint = this.fingerprint;
+    if (this.fingerprint) headers['x-fingerprint'] = this.fingerprint;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res;

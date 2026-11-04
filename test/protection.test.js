@@ -192,7 +192,7 @@ test('protected files: API key, license and machine headers; refusals say why', 
   const { p } = make({ options: { productCode: 'my bot', apiKey: 'sk_test', fetch } });
   assert.equal((await p.protectedFile('rules.dat')).toString(), 'RULES');
   assert.equal(seen.url, 'https://api.example.test/api/v2/protected-files/my%20bot/rules.dat');
-  assert.deepEqual(seen.headers, { license: KEY, authorization: 'Bearer sk_test', fingerprint: 'machine-1' });
+  assert.deepEqual(seen.headers, { 'x-license-key': KEY, authorization: 'Bearer sk_test', 'x-fingerprint': 'machine-1' });
   answer = { status: 403, body: '{"code":"SUSPENDED"}' };
   await assert.rejects(p.protectedFile('rules.dat'), (e) => e instanceof Refused && e.status === 403 && /SUSPENDED/.test(e.message));
   answer = { status: 503, body: '' };
