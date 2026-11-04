@@ -27,7 +27,8 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./analytics": "./src/analytics.js"
+    "./analytics": "./src/analytics.js",
+    "./protection": "./src/protection.js"
   },
   "files": [
     "src",

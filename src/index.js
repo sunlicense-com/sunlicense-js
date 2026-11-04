@@ -9,8 +9,10 @@
  */
 
 import { SunLicenseAnalytics } from './analytics.js';
+import { SunLicenseProtection } from './protection.js';
 
 export { SunLicenseAnalytics } from './analytics.js';
+export { SunLicenseProtection, Locked, Refused, mask } from './protection.js';
 export const VERSION = '0.1.0';
 
 /**
@@ -52,10 +54,19 @@ export class SunLicense {
       const headers = { 'content-type': 'application/json' };
       if (this.token) headers.authorization = `Bearer ${this.token}`;
 
+      // With client.protection(...): send its integrity result, then let it keep (valid + unlock) or forget
+      // (valid: false) the unlock. Outages change nothing.
+      const protection = this._protection;
+      const body = { license: licenseKey, ...context };
+      if (protection) {
+        protection.license(licenseKey, context.fingerprint || context.hwid || context.host || protection.fingerprint);
+        for (const [k, v] of Object.entries(protection.validateFields())) if (body[k] === undefined) body[k] = v;
+      }
+
       const response = await fetch(`${this.baseUrl}/api/v2/license/validate`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ license: licenseKey, ...context }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 
@@ -65,11 +76,24 @@ export class SunLicense {
       } catch {
         // Non-JSON response; leave data as null and let the caller inspect status.
       }
+      if (protection && data) protection.accept(data);
 
       return { valid: response.ok, status: response.status, data };
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Core unlock, tamper reports, the ownership notice and protected files, with this client's base URL and API key
+   * (see SunLicenseProtection). Every later validate() sends its integrity result and keeps or forgets the unlock.
+   *
+   * @param {object} [options]  `licenseKey`, `fingerprint`, `product`, `owner`, `terms`, `productCode`, `cacheDirectory`.
+   * @returns {SunLicenseProtection}
+   */
+  protection(options = {}) {
+    this._protection = new SunLicenseProtection({ baseUrl: this.baseUrl, apiKey: this.token, ...options });
+    return this._protection;
   }
 
   /**
