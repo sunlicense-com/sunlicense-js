@@ -27,7 +27,7 @@ import path from 'node:path';
 
 /** Sent as sdk.name/sdk.version; bump the version with each release. */
 export const SDK_NAME = 'js';
-export const SDK_VERSION = '0.1.0';
+export const SDK_VERSION = '0.2.0';
 export const DEFAULT_BASE_URL = 'https://api.sunlicense.com';
 /** Environment variable (and FiveM convar sunlicense_analytics) that switches analytics off on a machine. */
 export const ENV_SWITCH = 'SUNLICENSE_ANALYTICS';
