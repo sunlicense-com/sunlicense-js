@@ -24,6 +24,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { stripTrailing } from './util.js';
 
 /** Sent as sdk.name/sdk.version; bump the version with each release. */
 export const SDK_NAME = 'js';
@@ -75,7 +76,7 @@ export class SunLicenseAnalytics {
 
   constructor(options = {}) {
     const o = options || {};
-    this._endpoint = String(o.baseUrl || DEFAULT_BASE_URL).trim().replace(/\/+$/, '') + PATH;
+    this._endpoint = stripTrailing(String(o.baseUrl || DEFAULT_BASE_URL).trim(), '/') + PATH;
     this._apiKey = clean(o.apiKey, 512);
     this._licenseKey = supplier(o.licenseKey);
     this._fingerprint = clean(o.fingerprint, 255);

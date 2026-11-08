@@ -10,6 +10,7 @@
 
 import { SunLicenseAnalytics } from './analytics.js';
 import { SunLicenseProtection } from './protection.js';
+import { stripTrailing } from './util.js';
 
 export { SunLicenseAnalytics } from './analytics.js';
 export { SunLicenseProtection, Locked, Refused, mask } from './protection.js';
@@ -32,7 +33,7 @@ export class SunLicense {
    */
   constructor({ baseUrl, token, timeoutMs = 10000 } = {}) {
     if (!baseUrl) throw new TypeError('SunLicense: "baseUrl" is required');
-    this.baseUrl = String(baseUrl).replace(/\/+$/, '');
+    this.baseUrl = stripTrailing(String(baseUrl), '/');
     this.token = token;
     this.timeoutMs = timeoutMs;
   }
