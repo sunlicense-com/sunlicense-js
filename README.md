@@ -1,5 +1,7 @@
 # SunLicense — JavaScript Client
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16451/badge)](https://www.bestpractices.dev/projects/16451)
+
 Official JavaScript client for [SunLicense](https://sunlicense.com), a licence management and
 anti-piracy system for indie software developers.
 
