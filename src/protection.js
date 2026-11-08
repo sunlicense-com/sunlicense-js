@@ -30,6 +30,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { stripTrailing } from './util.js';
 
 export const DEFAULT_BASE_URL = 'https://api.sunlicense.com';
 /** How long the unlock from the last valid check keeps working without an answer from SunLicense (ms). */
@@ -63,7 +64,7 @@ const trim = (s) => (s == null || String(s).trim() === '' ? null : String(s).tri
 
 /** Base64 in any flavour the server may send: url-safe or standard, with or without padding. */
 export function decodeBase64(s) {
-  const t = String(s).trim().replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+  const t = stripTrailing(String(s).trim().replace(/-/g, '+').replace(/_/g, '/'), '=');
   if (!/^[A-Za-z0-9+/]*$/.test(t) || t.length % 4 === 1) throw new TypeError('not base64');
   return Buffer.from(t, 'base64');
 }
@@ -182,7 +183,7 @@ export class SunLicenseProtection {
    * @param {string|null} [options.cacheDirectory]  Where the unlock cache is kept; null = memory only. Default ~/.sunlicense.
    */
   constructor(options = {}) {
-    this.baseUrl = String(options.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = stripTrailing(String(options.baseUrl || DEFAULT_BASE_URL), '/');
     this.apiKey = trim(options.apiKey);
     this.licenseKey = trim(options.licenseKey);
     this.fingerprint = trim(options.fingerprint);
